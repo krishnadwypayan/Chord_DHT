@@ -15,4 +15,9 @@ public class Finger {
     public long getId() {
         return id;
     }
+
+    public String getAddress() { return address; }
+
+    public int getPort() { return port; }
+
 }
