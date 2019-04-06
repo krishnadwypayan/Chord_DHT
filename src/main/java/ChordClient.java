@@ -26,21 +26,43 @@ public class ChordClient implements Runnable {
             while ((line = socketReader.readLine()) != null) {
                 String[] socketReaderLine = line.split(":");
                 String command = socketReaderLine[0];
-                String arg = socketReaderLine[1];
-                System.out.println("Received => " + socketReaderLine[0] + ":" + socketReaderLine[1]);
+                System.out.println("Received => " + line);
 
                 switch (command) {
                     case ChordMain.FIND_SUCCESSOR:
                         // Find the successor of the id received from the InputStream
-                        Finger successor = findSuccessor(Long.valueOf(arg));
+                        String queryId = socketReaderLine[1];
+                        Finger successor = findSuccessor(Long.valueOf(queryId));
 
                         // Populate the response back to the node
                         socketWriter.println(ChordMain.SUCCESSOR_FOUND + ":" + successor.getAddress() + ":" + successor.getPort());
                         System.out.println("Sent => " + ChordMain.SUCCESSOR_FOUND + ":" + successor.getAddress() + ":" + successor.getPort());
 
                         break;
+
+                    case ChordMain.NEW_PREDECESSOR:
+                        String predAddress = socketReaderLine[1];
+                        int predPort = Integer.valueOf(socketReaderLine[2]);
+
+                        // Update the current node's predecessor
+                        this.chordNode.acquire();
+                        this.chordNode.setPredecessor(new Finger(predAddress, predPort));
+                        this.chordNode.release();
+
+                        break;
+
+                    case ChordMain.FIND_PREDECESSOR:
+                        System.out.println("Received => " + ChordMain.FIND_PREDECESSOR);
+                        String response = this.chordNode.getPredecessor().getAddress() + ":" + this.chordNode.getPredecessor().getPort();
+                        socketWriter.println(response);
+                        System.out.println("Sent => " + response);
+                        break;
                 }
             }
+
+            socketReader.close();
+            socketWriter.close();
+            clientSocket.close();
 
         } catch (IOException e) {
             e.printStackTrace();
@@ -66,6 +88,8 @@ public class ChordClient implements Runnable {
 
     // Search the local finger table for the highest predecessor pf the id
     private Finger closestPrecedingNode(long id) {
+        id = id % ChordMain.CHORD_RING_SIZE;
+
         for (int i = 31; i >= 0; i--) {
             long fingerId = this.chordNode.getFingerTable().get(i).getId();
             if (fingerId > this.chordNode.getId() && fingerId < id) {

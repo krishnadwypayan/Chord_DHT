@@ -6,16 +6,18 @@ import java.math.BigInteger;
 import java.net.Socket;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.Semaphore;
 
 public class ChordNode {
 
     private String address, existingAddress = null;
-    private Finger predecessor = null;
-    private Finger successor;
     private int port, existingPort;
     private long id;
     private String hex;
+    private Finger predecessor = null;
+    private Finger successor;
     private Map<Integer, Finger> fingerTable;
+    private Semaphore semaphore = new Semaphore(1);
 
     // Create a new Chord Ring
     ChordNode(String address, int port) {
@@ -34,10 +36,13 @@ public class ChordNode {
 
         // initialize finger table and successor
         this.initializeFingerTable();
-        this.successor = this.fingerTable.get(0);
+        this.initializeSuccessors();
 
         // Launch server thread that will listen to clients
         new Thread(new ChordServer(this)).start();
+
+        // Launch the NodeStabilizer that will stabilize the ChordNode periodically
+        new Thread(new ChordNodeStabilizer(this)).start();
 
         // print the finger table
         this.printFingerTable();
@@ -62,7 +67,7 @@ public class ChordNode {
 
         // initialize finger table and successor
         this.initializeFingerTable();
-        this.successor = this.fingerTable.get(0);
+        this.initializeSuccessors();
 
         // Launch server thread that will listen to clients
         new Thread(new ChordServer(this)).start();
@@ -124,6 +129,31 @@ public class ChordNode {
         }
     }
 
+    private void initializeSuccessors() {
+        this.successor = this.fingerTable.get(0);
+        this.predecessor = new Finger(this.getAddress(), this.getPort());
+
+        // Establish a connection with the successor to notify that we are the new predecessor.
+        // The successor should not be equal to the current node.
+        if ((!this.successor.getAddress().equals(this.getAddress()))
+                || (this.successor.getPort() != this.getPort())) {
+            try {
+                Socket socket = new Socket(this.successor.getAddress(), this.successor.getPort());
+                PrintWriter socketWriter = new PrintWriter(socket.getOutputStream(), true);
+
+                // Notify the successor that we are the new predecessor
+                String notification = ChordMain.NEW_PREDECESSOR + ":" + this.getAddress() + ":" + this.getPort();
+                socketWriter.println(notification);
+                System.out.println("Sent => " + notification);
+
+                socketWriter.close();
+                socket.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
     private void printFingerTable() {
         for (Integer i : this.fingerTable.keySet()) {
             System.out.println(i + " " + this.fingerTable.get(i).getId());
@@ -144,8 +174,30 @@ public class ChordNode {
 
     public Finger getPredecessor() { return predecessor; }
 
+    public void setPredecessor(Finger predecessor) {
+        this.predecessor = predecessor;
+    }
+
     public Finger getSuccessor() { return successor; }
 
+    public void setSuccessor(Finger successor) {
+        this.successor = successor;
+    }
+
     public Map<Integer, Finger> getFingerTable() { return fingerTable; }
+
+    public void acquire() {
+        try {
+            this.semaphore.acquire();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void release() {
+        this.semaphore.release();
+    }
+
+    public Semaphore getSemaphore() { return this.semaphore; }
 
 }

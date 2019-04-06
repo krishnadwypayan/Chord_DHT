@@ -2,6 +2,8 @@ public class ChordMain {
 
     public static final String FIND_SUCCESSOR = "Find Successor";
     public static final String SUCCESSOR_FOUND = "Successor Found";
+    public static final String NEW_PREDECESSOR = "New Predecessor";
+    public static final String FIND_PREDECESSOR = "Find Predecessor";
     public static final long CHORD_RING_SIZE = 4294967296L;    // m = 32; RingSize = 2^32
 
     public static void main(String[] args) {
